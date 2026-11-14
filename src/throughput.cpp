@@ -103,6 +103,25 @@ main()
 		}
 	}
 
+	profile_stats AliasProfile = {};
+	{
+		categorical Cat = {};
+		MakeCategorical(5, (F64[]){0.1, 0.2, 0.5, 0.1, 0.1}, &Cat);
+		volatile F64 x;
+		for (I32 J = 0; J < Warmup; ++J) {
+			x = RandomCategorical(&Rng, &Cat);
+		}
+
+		for (I32 B = 0; B < NBatches; ++B) {
+			U64 Start = ReadTSC();
+			for (I32 J = 0; J < NSamples; ++J) {
+				x = RandomCategorical(&Rng, &Cat);
+			}
+			U64 Elapsed = ReadTSC() - Start;
+			IncrementStats(&AliasProfile, Elapsed);
+		}
+	}
+
 	printf("RandomU64 Throughput : %.2f ± %.2f ns / Sample\n",
 		TSCToWall(U64Profile.AvgTicks, TimeUnit_Ns)/NSamples,
 		TSCToWall(U64Profile.StdTicks, TimeUnit_Ns)/NSamples);
@@ -122,4 +141,8 @@ main()
 	printf("RandomExponential Throughput : %.2f ± %.2f ns / Sample\n",
 		TSCToWall(ZigExpProfile.AvgTicks, TimeUnit_Ns)/NSamples,
 		TSCToWall(ZigExpProfile.StdTicks, TimeUnit_Ns)/NSamples);
+
+	printf("RandomCategorical Throughput : %.2f ± %.2f ns / Sample\n",
+		TSCToWall(AliasProfile.AvgTicks, TimeUnit_Ns)/NSamples,
+		TSCToWall(AliasProfile.StdTicks, TimeUnit_Ns)/NSamples);
 }

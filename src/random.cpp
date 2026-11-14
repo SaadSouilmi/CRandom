@@ -2,7 +2,7 @@
    Apache-2.0.
    sampling zig follows NumPy. Copyright 2005-2025 NumPy Developers; BSD-3-Clause,
    see licenses/numpy.txt.*/
-#include "random.h"
+#include <stdlib.h>
 #include <math.h>
 #include <pthread.h>
 
@@ -111,12 +111,11 @@ RandomU64(rng *R)
 internal U32 
 RandomU32(rng *R) { return (U32)(RandomU64(R) >> 32); }
 
+internal F64 
+RandomUniform(rng *R) { return (RandomU64(R) >> 11)*0x1p-53; }
 
 internal F64 
-RandomUniform(rng *R) { return ((F64)(RandomU64(R) >> 12) + 0.5)*0x1p-52; }
-
-internal F64 
-RandomUniformClosedOpen(rng *R) { return (RandomU64(R) >> 11)*0x1p-53; }
+RandomUniformClosed(rng *R) { return ((F64)(RandomU64(R) >> 12) + 0.5)*0x1p-52; }
 
 internal F64
 RandomNormal(rng *Rng)
@@ -133,8 +132,8 @@ RandomNormal(rng *Rng)
 		{
 			for (;;)
 			{
-				F64 XX = -ZigNorInvR*log1p(-RandomUniformClosedOpen(Rng));
-				F64 YY = -log1p(-RandomUniformClosedOpen(Rng));
+				F64 XX = -ZigNorInvR*log1p(-RandomUniform(Rng));
+				F64 YY = -log1p(-RandomUniform(Rng));
 				if (YY + YY > XX*XX)
 				{
 					return ((RAbs >> 8) & 1) ? -(ZigNorR + XX) : ZigNorR + XX;
@@ -144,7 +143,7 @@ RandomNormal(rng *Rng)
 		else
 		{
 			F64 Pdf = exp(-0.5*X*X);
-			F64 Sample = (ZigNorPdf[Idx - 1] - ZigNorPdf[Idx])*RandomUniformClosedOpen(Rng) + ZigNorPdf[Idx];
+			F64 Sample = (ZigNorPdf[Idx - 1] - ZigNorPdf[Idx])*RandomUniform(Rng) + ZigNorPdf[Idx];
 			if (Sample < Pdf) { return X; }
 		}
 	}
@@ -161,9 +160,82 @@ RandomExponential(rng *Rng)
 		zig_layer L = ZigExp[Idx];
 		F64 X = Ri*L.W;
 		if (Ri < L.K) { return X; }
-		if (Idx == 0) { return ZigExpR - log1p(-RandomUniformClosedOpen(Rng)); }
+		if (Idx == 0) { return ZigExpR - log1p(-RandomUniform(Rng)); }
 		F64 Pdf = exp(-X);
-		F64 Sample = (ZigExpPdf[Idx - 1] - ZigExpPdf[Idx])*RandomUniformClosedOpen(Rng) + ZigExpPdf[Idx];
+		F64 Sample = (ZigExpPdf[Idx - 1] - ZigExpPdf[Idx])*RandomUniform(Rng) + ZigExpPdf[Idx];
 		if (Sample < Pdf) { return X; }
 	}
+}
+
+
+internal U64 
+RandomCategorical(rng *R, const categorical* Cat)
+{
+	U64 J = RandomInt(R, Cat->NCat);
+	Alias* A = &Cat->AliasTable[J];
+	if (A->Single) { return A->C1; }
+	return (RandomUniform(R) < A->P) ? A->C1 : A->C2;
+}
+
+// Sample a uniform in [0, N) via rejection sampling
+// TODO: Improve this could def be more efficient
+internal U64 
+RandomInt(rng *R, U64 N)
+{
+	U64 Threshold = -N%N; // This is a trick to get UINT64_MAX % N
+	for (;;) {
+		U64 U = RandomU64(R);
+		if (U < Threshold) { continue; }
+		return U % N;
+	}
+}
+
+internal I32 
+MakeCategorical(U64 NCat, const F64 *p, categorical* Cat)
+{
+	F64 Sum = 0;
+	for (U64 J = 0; J < NCat; ++J) { Sum += p[J]; }
+	F64* q = (F64*)malloc(sizeof(F64)*NCat);
+	U64* Small = (U64*)malloc(sizeof(I32)*NCat);
+	U64* Large = (U64*)malloc(sizeof(I32)*NCat);
+	U64 NSmall = 0, NLarge = 0;
+	if (q == NULL || Small == NULL || Large == NULL) { return 1; }
+	for (U64 J = 0; J < NCat; ++J) {
+		q[J] = (p[J]/Sum) * (F64)NCat;
+		if (q[J] < 1) { Small[NSmall++] = J; }
+		else { Large[NLarge++] = J; }
+	}
+
+	Cat->NCat = NCat;
+	Cat->AliasTable = (Alias*)malloc(sizeof(Alias)*NCat);
+	if (Cat->AliasTable == NULL) { return 1; }
+	
+	while (NSmall > 0 && NLarge > 0)
+	{
+		U64 S = Small[--NSmall];
+		U64 L = Large[--NLarge];
+
+		Alias* A = &Cat->AliasTable[S];
+		A->C1 = S;
+		A->C2 = L;
+		A->Single = 0;
+		A->P = q[S];
+
+		q[L] -= 1.0 - q[S];
+
+		if (q[L] < 1) { Small[NSmall++] = L; }
+		else { Large[NLarge++] = L; }
+	}
+
+	while (NSmall > 0 || NLarge >0)
+	{
+		U64 J = (NSmall > 0) ? Small[--NSmall] : Large[--NLarge];
+
+		Alias* A = &Cat->AliasTable[J];
+		A->C1 = J;
+		A->C2 = UINT64_MAX;
+		A->Single = 1;
+		A->P = 1.0;
+	}
+	return 0;
 }
