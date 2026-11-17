@@ -120,6 +120,7 @@ main()
 			U64 Elapsed = ReadTSC() - Start;
 			IncrementStats(&AliasProfile, Elapsed);
 		}
+		free(Cat->AliasTable);
 	}
 
 	printf("RandomU64 Throughput : %.2f ± %.2f ns / Sample\n",

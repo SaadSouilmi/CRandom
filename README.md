@@ -1,6 +1,10 @@
 # CRandom
 
-🚧 [Blog under construction](https://saadsouilmi.github.io/CRandom/)
+<p align="center">
+  <a href="https://saadsouilmi.github.io/CRandom/">
+    <img src="assets/blog-badge.svg" width="88" height="28" alt="blogpost">
+  </a>
+</p>
 
 Simple RNG tools for C projects. I generally use this same base for every project, I am a big proponent
 of understanding as much as possible how things work. I use components from different codebases, mainly
