@@ -196,10 +196,10 @@ MakeCategorical(U64 NCat, const F64 *p, categorical* Cat)
 	F64 Sum = 0;
 	for (U64 J = 0; J < NCat; ++J) { Sum += p[J]; }
 	F64* q = (F64*)malloc(sizeof(F64)*NCat);
-	U64* Small = (U64*)malloc(sizeof(I32)*NCat);
-	U64* Large = (U64*)malloc(sizeof(I32)*NCat);
+	U64* Small = (U64*)malloc(sizeof(U64)*NCat);
+	U64* Large = (U64*)malloc(sizeof(U64)*NCat);
 	U64 NSmall = 0, NLarge = 0;
-	if (q == NULL || Small == NULL || Large == NULL) { return 1; }
+	if (q == NULL || Small == NULL || Large == NULL) { free(q); free(Small); free(Large); return 1; }
 	for (U64 J = 0; J < NCat; ++J) {
 		q[J] = (p[J]/Sum) * (F64)NCat;
 		if (q[J] < 1) { Small[NSmall++] = J; }
@@ -208,7 +208,7 @@ MakeCategorical(U64 NCat, const F64 *p, categorical* Cat)
 
 	Cat->NCat = NCat;
 	Cat->AliasTable = (Alias*)malloc(sizeof(Alias)*NCat);
-	if (Cat->AliasTable == NULL) { return 1; }
+	if (Cat->AliasTable == NULL) { free(q); free(Small); free(Large); return 1; }
 	
 	while (NSmall > 0 && NLarge > 0)
 	{
@@ -237,5 +237,8 @@ MakeCategorical(U64 NCat, const F64 *p, categorical* Cat)
 		A->Single = 1;
 		A->P = 1.0;
 	}
+	free(q);
+	free(Small);
+	free(Large);
 	return 0;
 }
